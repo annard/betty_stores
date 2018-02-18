@@ -12,37 +12,42 @@ defmodule RegistryStoreTest do
   end
 
   test "should store a key" do
-    assert :ok == RegistryStore.store("Key", "Value")
-    assert :ok == RegistryStore.store("Key1", :value)
-    assert :ok == RegistryStore.store("Key2", fn(x) -> 2*x end)
+    assert :ok == RegistryStore.store("Bucket", "Key", "Value")
+    assert :ok == RegistryStore.store("Bucket", "Key1", :value)
+    assert :ok == RegistryStore.store("Bucket", "Key2", fn(x) -> 2*x end)
+  end
+
+  test "should store identical keys in separate buckets" do
+    assert :ok == RegistryStore.store("Bucket", "Key", "Value")
+    assert :ok == RegistryStore.store("Bucket2", "Key", :value)
   end
 
   test "should retrieve value for a key" do
-    :ok = RegistryStore.store("Key", "Value")
-    assert {:ok, "Value"} == RegistryStore.retrieve("Key")
+    :ok = RegistryStore.store("Bucket", "Key", "Value")
+    assert {:ok, "Value"} == RegistryStore.retrieve("Bucket", "Key")
   end
 
   test "should not fail for non-existing key" do
-    assert :notfound == RegistryStore.retrieve("Ozewiewozewiezewallakristalla")
+    assert :notfound == RegistryStore.retrieve("bucket", "Ozewiewozewiezewallakristalla")
   end
 
   test "should delete value for a key" do
-    :ok = RegistryStore.store("Key", "Value")
-    assert :ok == RegistryStore.delete("Key")
+    :ok = RegistryStore.store("Bucket", "Key", "Value")
+    assert :ok == RegistryStore.delete("Bucket", "Key")
   end
 
   test "should not fail to delete non-existing key" do
-    assert :ok == RegistryStore.delete("Ozewiewozewiezewallakristalla")
+    assert :ok == RegistryStore.delete("Bucket", "Ozewiewozewiezewallakristalla")
   end
 
   test "should update existing key" do
-    RegistryStore.store("Key", "Value")
-    assert {:ok, "Value"} == RegistryStore.update("Key", "NewValue")
-    assert {:ok, "NewValue"} == RegistryStore.retrieve("Key")
+    RegistryStore.store("Bucket", "Key", "Value")
+    assert {:ok, "Value"} == RegistryStore.update("Bucket", "Key", "NewValue")
+    assert {:ok, "NewValue"} == RegistryStore.retrieve("Bucket", "Key")
   end
 
   test "should fail to update for non-existing key" do
-    assert {:error, _} = RegistryStore.update("Key", "NewValue")
+    assert {:error, _} = RegistryStore.update("Bucket", "Key", "NewValue")
   end
 
 end

@@ -5,24 +5,24 @@ defmodule BettyStores do
   """
 
   @doc """
-  Stores a key, an arbitrary value and a timeout. This timeout may be optional (in that case use
+  Stores a key, an arbitrary value and a timeout for a bucket. This timeout may be optional (in that case use
   a default value :infinity in your implementation).
   """
-  @callback store(key :: String.t, value :: term, timeout) :: :ok | {:error, String.t}
+  @callback store(bucket:: String.t, key :: String.t, value :: term, timeout) :: :ok | {:error, String.t}
 
   @doc"""
-  Retrieve the value for a given key.
+  Retrieve the value for a given key in a bucket.
   """
-  @callback retrieve(key :: String.t) :: {:ok, term} | :notfound | {:error, String.t}
+  @callback retrieve(bucket:: String.t, key :: String.t) :: {:ok, term} | :notfound | {:error, String.t}
 
   @doc """
-  Delete the given key from the store.
+  Delete the given key in a bucket from the store.
   """
-  @callback delete(key :: String.t) :: :ok | {:error, String.t}
+  @callback delete(bucket:: String.t, key :: String.t) :: :ok | {:error, String.t}
 
   @doc """
-  Update the value for a given key in the store. Returns the old value in case of success.
+  Update the value for a given key in a bucket in the store. Returns the old value in case of success.
   """
-  @callback update(key :: String.t, new_value :: term, timeout) :: {:ok, old_value :: term} | {:error, String.t}
+  @callback update(bucket:: String.t, key :: String.t, new_value :: term, timeout) :: {:ok, old_value :: term} | {:error, String.t}
 
 end
