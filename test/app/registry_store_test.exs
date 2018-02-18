@@ -38,6 +38,7 @@ defmodule RegistryStoreTest do
   test "should update existing key" do
     RegistryStore.store("Key", "Value")
     assert {:ok, "Value"} == RegistryStore.update("Key", "NewValue")
+    assert {:ok, "NewValue"} == RegistryStore.retrieve("Key")
   end
 
   test "should fail to update for non-existing key" do

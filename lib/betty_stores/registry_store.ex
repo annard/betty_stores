@@ -17,7 +17,7 @@ defmodule BettyStores.RegistryStore do
     case Registry.lookup(__MODULE__, key) do
       [] -> :notfound
       [{_, {value, _}}] -> {:ok, value}
-      _ -> {:error, "Multiple value found for #{key}"}
+      _ -> {:error, "Invalid data found for #{key}"}
     end
   end
 
@@ -25,9 +25,9 @@ defmodule BettyStores.RegistryStore do
     Registry.unregister(__MODULE__, key)
   end
 
-  def update(key, value, _timeout \\ :infinity) do
+  def update(key, value, timeout \\ :infinity) do
     # NB! The Registry.update_value/3 expects a callback function, we just want to replace any existing value
-    case Registry.update_value(__MODULE__, key, fn(_) -> value end) do
+    case Registry.update_value(__MODULE__, key, fn(_) -> {value, timeout} end) do
       :error -> {:error, "Could not update value for #{key}: does it exist?"}
       {_, {old_value, _}} -> {:ok, old_value}
     end
