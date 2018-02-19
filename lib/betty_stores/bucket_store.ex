@@ -20,14 +20,26 @@ defmodule BettyStores.BucketStore do
 
   @default_timer 100
 
+  @doc """
+  Interface to deal with DynamicSupervisor oddities on starting a child. See `start_link/1`.
+  """
   def start_link([], name) do
     start_link(name)
   end
 
+  @doc """
+  Needs a name for the bucket to start the bucket process.
+  """
+  @spec start_link(String.t) :: {:ok, PID} | {:error, term}
   def start_link(name) do
     GenServer.start_link(__MODULE__, name, [])
   end
 
+  ## Server Callbacks
+
+  @doc """
+  Initialises a bucket process. Needs a name for the bucket. Also starts a timer to clean up expired keys.
+  """
   def init(bucket_name \\ "") do
     Process.flag(:trap_exit, true)
     {:ok, tref} = :timer.send_interval(@default_timer, self(), :cleanup)
@@ -38,6 +50,9 @@ defmodule BettyStores.BucketStore do
     {:ok, %BettyStores.BucketStoreStruct{bucket_name: bucket_name, store_pid: store_pid, timer: tref}}
   end
 
+  @doc """
+  Store a key, value and an expiry time in msec.
+  """
   def handle_call({:store, key, value, timeout}, _from, state) do
     case Registry.register(__MODULE__, {state.bucket_name, key}, {value, timeout}) do
       {:ok, _} ->
@@ -48,6 +63,9 @@ defmodule BettyStores.BucketStore do
     end
   end
 
+  @doc """
+  Retrieves a key from the store.
+  """
   def handle_call({:retrieve, key}, _from, state) do
     case Registry.lookup(__MODULE__, {state.bucket_name, key}) do
       [] -> {:reply, :notfound, state}
@@ -56,19 +74,32 @@ defmodule BettyStores.BucketStore do
     end
   end
 
+  @doc """
+  Deletes a key from the store.
+  """
   def handle_call({:delete, key}, _from, state) do
     Registry.unregister(__MODULE__, {state.bucket_name, key})
     {:reply, :ok, state}
   end
 
+  @doc """
+  Updates an existing key with both a new value and expiry timestamp and in the store.
+  If the key is not present fails. Updates the state for to reflect the new expiry.
+  """
   def handle_call({:update, key, value, timeout}, _from, state) do
     # NB! The Registry.update_value/3 expects a callback function, we just want to replace any existing value
     case Registry.update_value(__MODULE__, {state.bucket_name, key}, fn(_) -> {value, timeout} end) do
-      :error -> {:reply, {:error, "Could not update value for #{key} in bucket #{state.bucket_name}: does it exist?"}, state}
-      {_, {old_value, _}} -> {:reply, {:ok, old_value}, state}
+      :error ->
+        {:reply, {:error, "Could not update value for #{key} in bucket #{state.bucket_name}: does it exist?"}, state}
+      {_, {old_value, _}} ->
+        new_state = update_expiry_for_state(key, timeout, state)
+        {:reply, {:ok, old_value}, new_state}
     end
   end
 
+  @doc ~S"""
+  Is invoked every @default_timer msec to check for expired keys.
+  """
   def handle_info(:cleanup, state) do
     current_ts = timestamp_since_epoch()
     {new_tk_map, new_ts_list, remove_keys} = expired_keys(state.timeout_to_keys, state.timeout_list, current_ts, [])
@@ -94,7 +125,10 @@ defmodule BettyStores.BucketStore do
   Updates the state with an updated list of keys per expiry timestamps, and an ordered list of expiry timestamps.
   """
   @spec update_expiry_for_state(String.t, pos_integer, BettyStores.BucketStoreStruct.t) :: BettyStores.BucketStoreStruct.t
-  def update_expiry_for_state(_key, :infinity, state), do: state
+  def update_expiry_for_state(_key, :infinity, state) do
+    # FIXME: need to update the state if an existing key is updated with a new value of :infinity!
+    state
+  end
   def update_expiry_for_state(key, timeout, %BettyStores.BucketStoreStruct{timeout_to_keys: tk_map, timeout_list: ts_list} = state) do
     timeout_abs = timestamp_since_epoch() + timeout
     {new_tk_map, new_ts_list} = case Map.get(tk_map, timeout_abs) do
@@ -132,7 +166,7 @@ defmodule BettyStores.BucketStore do
     {tk_map, ts_list, remove_list}
   end
 
-  ### BettyStores behaviour
+  ## BettyStores behaviour
 
   def store(bucket_proc, key, value, timeout \\ :infinity) do
     GenServer.call(bucket_proc, {:store, key, value, timeout})

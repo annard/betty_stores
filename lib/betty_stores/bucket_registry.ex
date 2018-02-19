@@ -31,10 +31,12 @@ defmodule BettyStores.BucketRegistry do
     {:ok, %{buckets: %{}, bucket_refs: %{}}}
   end
 
+  # Looks up a bucket.
   def handle_call({:lookup, name}, _from, state) do
     {:reply, Map.fetch(state.buckets, name), state}
   end
 
+  # Create a new bucket if it doesn't yet exist.
   def handle_call({:create, name}, _from, state) do
     if Map.has_key?(state.buckets, name) do
       {:reply, :ok, state}
@@ -45,6 +47,7 @@ defmodule BettyStores.BucketRegistry do
     end
   end
 
+  # Clean up after crashed buckets.
   def handle_info({:DOWN, ref, :process, _pid, _reason}, %{buckets: bucket_map, bucket_refs: refs}) do
     {name, new_refs} = Map.pop(refs, ref)
     Logger.warn("Process down for bucket #{name}")
