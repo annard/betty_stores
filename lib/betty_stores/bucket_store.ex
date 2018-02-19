@@ -29,6 +29,7 @@ defmodule BettyStores.BucketStore do
   end
 
   def init(bucket_name \\ "") do
+    Process.flag(:trap_exit, true)
     {:ok, tref} = :timer.send_interval(@default_timer, self(), :cleanup)
     store_pid = case Registry.start_link(keys: :unique, name: __MODULE__) do
       {:ok, a_pid} -> a_pid
@@ -38,7 +39,7 @@ defmodule BettyStores.BucketStore do
   end
 
   def handle_call({:store, key, value, timeout}, _from, state) do
-    case Registry.register(__MODULE__, key, {value, timeout}) do
+    case Registry.register(__MODULE__, {state.bucket_name, key}, {value, timeout}) do
       {:ok, _} ->
         new_state = update_expiry_for_state(key, timeout, state)
         {:reply, :ok, new_state}
@@ -48,22 +49,22 @@ defmodule BettyStores.BucketStore do
   end
 
   def handle_call({:retrieve, key}, _from, state) do
-    case Registry.lookup(__MODULE__, key) do
+    case Registry.lookup(__MODULE__, {state.bucket_name, key}) do
       [] -> {:reply, :notfound, state}
       [{_, {value, _}}] -> {:reply, {:ok, value}, state}
-      _ -> {:reply, {:error, "Invalid data found for #{key}"}, state}
+      _ -> {:reply, {:error, "Invalid data found for #{key} in bucket #{state.bucket_name}"}, state}
     end
   end
 
   def handle_call({:delete, key}, _from, state) do
-    Registry.unregister(__MODULE__, key)
+    Registry.unregister(__MODULE__, {state.bucket_name, key})
     {:reply, :ok, state}
   end
 
   def handle_call({:update, key, value, timeout}, _from, state) do
     # NB! The Registry.update_value/3 expects a callback function, we just want to replace any existing value
-    case Registry.update_value(__MODULE__, key, fn(_) -> {value, timeout} end) do
-      :error -> {:reply, {:error, "Could not update value for #{key}: does it exist?"}, state}
+    case Registry.update_value(__MODULE__, {state.bucket_name, key}, fn(_) -> {value, timeout} end) do
+      :error -> {:reply, {:error, "Could not update value for #{key} in bucket #{state.bucket_name}: does it exist?"}, state}
       {_, {old_value, _}} -> {:reply, {:ok, old_value}, state}
     end
   end
@@ -73,14 +74,20 @@ defmodule BettyStores.BucketStore do
     {new_tk_map, new_ts_list, remove_keys} = expired_keys(state.timeout_to_keys, state.timeout_list, current_ts, [])
     # We have to remove the keys here, but only if one hasn't been updated in the meantime!
     Enum.each(remove_keys, fn(key) ->
-      case Registry.lookup(__MODULE__, key) do
+      case Registry.lookup(__MODULE__, {state.bucket_name, key}) do
         [] -> :ok
-        [{_, {_value, timestamp}}] -> unless timestamp > current_ts, do: Registry.unregister(__MODULE__, key)
+        [{_, {_value, timestamp}}] -> unless timestamp > current_ts, do: Registry.unregister(__MODULE__, {state.bucket_name, key})
         _ -> :ok
       end
     end)
 
     {:noreply, %BettyStores.BucketStoreStruct{state| timeout_to_keys: new_tk_map, timeout_list: new_ts_list}}
+  end
+
+  def terminate(reason, state) do
+    Process.unlink(state.store_pid)
+    Process.exit(state.store_pid, :shutdown)
+    :ok
   end
 
   @doc """

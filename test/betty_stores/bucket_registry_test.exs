@@ -18,6 +18,19 @@ defmodule BettyStores.BucketRegistryTest do
     assert {:ok, "Value"} = BucketStore.retrieve(bucket, "Key")
   end
 
+  test "should have identical keys in different buckets", %{registry: registry} do
+    BucketRegistry.create(registry, "betty")
+    assert {:ok, bucket} = BucketRegistry.lookup(registry, "betty")
+    :ok = BucketStore.store(bucket, "Key", "Value")
+
+    BucketRegistry.create(registry, "blocks")
+    assert {:ok, bucket2} = BucketRegistry.lookup(registry, "blocks")
+    :ok = BucketStore.store(bucket2, "Key", "Value")
+
+    assert {:ok, "Value"} = BucketStore.retrieve(bucket, "Key")
+    assert {:ok, "Value"} = BucketStore.retrieve(bucket2, "Key")
+  end
+
   test "removes bucket on stop", %{registry: registry} do
     BucketRegistry.create(registry, "betty")
     {:ok, bucket} = BucketRegistry.lookup(registry, "betty")

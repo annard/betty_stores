@@ -12,7 +12,8 @@ defmodule BettyStores.BucketSupervisor do
   # Start a Bucket process and add it to supervision
   def add_bucket(name) do
     child_spec = {BettyStores.BucketStore, {name}}
-    DynamicSupervisor.start_child(__MODULE__, child_spec)
+    {:ok, state} = DynamicSupervisor.start_child(__MODULE__, child_spec)
+    {:ok, state}
   end
 
   # Terminate a Bucket process and remove it from supervision
